@@ -7,6 +7,11 @@ function App() {
   const chunksRef = useRef([]);
   const mixedStreamRef = useRef(null);
   const [shareScreenAgain, setShareScreenAgain] = useState(false);
+  const progressBarRef = useRef(null);
+  const [totalTime, setTotalTime] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [remainingTime, setRemainingTime] = useState(0);
+  console.log("progress:", progress);
 
   useEffect(() => {}, [shareScreenAgain]);
 
@@ -99,6 +104,11 @@ function App() {
   // </div>;
 
   // -----> this code allows user to record even if he/she doesn't selects systems audio <--------
+
+  const calculateRemainingTime = (progress, totalTime) => {
+    return totalTime - (progress / 100) * totalTime;
+  };
+
   const startRecording = async () => {
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -150,10 +160,23 @@ function App() {
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunksRef.current.push(e.data);
+          const totalChunksSize = chunksRef.current.reduce(
+            (acc, chunk) => acc + chunk.size,
+            0
+          );
+          setProgress((totalChunksSize / (1024 * 1024)) * 100); // Convert to MB
+          if (totalTime > 0) {
+            setRemainingTime(calculateRemainingTime(progress, totalTime));
+          }
         }
       };
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "video/webm" });
+        const fileSize = blob.size;
+        const uploadSpeed = 5; // Mbps (Assumed upload speed)
+        const totalTime = fileSize / (uploadSpeed * 125); // Convert to MB
+        setTotalTime(totalTime);
+        setRemainingTime(totalTime);
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         document.body.appendChild(a);
@@ -162,6 +185,9 @@ function App() {
         a.download = "recording.webm";
         a.click();
         chunksRef.current = [];
+        // setProgress(0);
+        // setTotalTime(0);
+        // setRemainingTime(0);
       };
 
       mediaRecorderRef.current = mediaRecorder;
@@ -191,6 +217,21 @@ function App() {
           <button onClick={startRecording}>Share screen</button>
         ) : null}
       </div>
+      <div style={{ width: "100%", backgroundColor: "#f3f3f3" }}>
+        <div
+          ref={progressBarRef}
+          style={{
+            height: "30px",
+            width: `${progress}%`,
+            backgroundColor: "#4caf50",
+          }}
+        ></div>
+      </div>
+
+      {totalTime > 0 && <div>Total Time: {Math.round(totalTime)} seconds</div>}
+      {remainingTime > 0 && (
+        <div>Remaining Time: {Math.round(remainingTime)} seconds</div>
+      )}
     </>
   );
 }
